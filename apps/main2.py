@@ -8,37 +8,28 @@ import torch.optim as optim
 import torch.nn as nn
 from torch.autograd import Variable
 
+from apps.config import *
+from apps.hyper_params import *
+
+use_gpu = torch.cuda.is_available()
+
 use_plot = True
 use_save = True
 if use_save:
     import pickle
     from datetime import datetime
 
-DATA_DIR = 'data'
-TRAIN_DIR = 'train_txt'
-TEST_DIR = 'test_txt'
-TRAIN_FILE = 'train_txt.txt'
-TEST_FILE = 'test_txt.txt'
-TRAIN_LABEL = 'train_label.txt'
-TEST_LABEL = 'test_label.txt'
 
-## parameter setting
-epochs = 15
-batch_size = 64
-use_gpu = torch.cuda.is_available()
-learning_rate = 0.01
 
 def adjust_learning_rate(optimizer, epoch):
-    lr = learning_rate * (0.1 ** (epoch // 10))
+    lr = LEARNING_RATE * (0.1 ** (epoch // 10))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     return optimizer
 
-if __name__=='__main__':
-    ### parameter setting
-    embedding_dim = 100
-    hidden_dim = 50
-    sentence_len = 64
+
+def get_input_data():
+    # global filenames
     train_file = os.path.join(DATA_DIR, TRAIN_FILE)
     test_file = os.path.join(DATA_DIR, TEST_FILE)
     fp_train = open(train_file, 'r')
@@ -48,40 +39,50 @@ if __name__=='__main__':
     fp_test = open(test_file, 'r')
     test_filenames = [os.path.join(TEST_DIR, line.strip()) for line in fp_test]
     fp_test.close()
+    corpus = DP.Corpus(DATA_DIR, filenames)
+    return train_filenames, test_filenames, corpus
+
+
+if __name__=='__main__':
+    ### parameter setting
+    embedding_dim = 100
+    hidden_dim = 50
+    sentence_len = 64
+    train_filenames, test_filenames, corpus =  get_input_data()
     # filenames.extend(test_filenames)
 
-    corpus = DP.Corpus(DATA_DIR, filenames)
+
     nlabel = 8
 
     ### create model
-    model = LSTMC.LSTMClassifier(embedding_dim=embedding_dim,hidden_dim=hidden_dim,
-                           vocab_size=len(corpus.dictionary),label_size=nlabel, batch_size=batch_size, use_gpu=use_gpu)
+    model = LSTMC.LSTMClassifier(embedding_dim=embedding_dim, hidden_dim=hidden_dim,
+                                 vocab_size=len(corpus.dictionary), label_size=nlabel, batch_size=BATCH_SIZE, use_gpu=use_gpu)
     if use_gpu:
         model = model.cuda()
     ### data processing
     dtrain_set = DP.TxtDatasetProcessing(DATA_DIR, TRAIN_DIR, TRAIN_FILE, TRAIN_LABEL, sentence_len, corpus)
 
     train_loader = DataLoader(dtrain_set,
-                          batch_size=batch_size,
-                          shuffle=True,
-                          num_workers=4
-                         )
+                              batch_size=BATCH_SIZE,
+                              shuffle=True,
+                              num_workers=4
+                              )
     dtest_set = DP.TxtDatasetProcessing(DATA_DIR, TEST_DIR, TEST_FILE, TEST_LABEL, sentence_len, corpus)
 
     test_loader = DataLoader(dtest_set,
-                          batch_size=batch_size,
-                          shuffle=False,
-                          num_workers=4
-                         )
+                             batch_size=BATCH_SIZE,
+                             shuffle=False,
+                             num_workers=4
+                             )
 
-    optimizer = optim.SGD(model.parameters(), lr=learning_rate)
+    optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
     loss_function = nn.CrossEntropyLoss()
     train_loss_ = []
     test_loss_ = []
     train_acc_ = []
     test_acc_ = []
     ### training procedure
-    for epoch in range(epochs):
+    for epoch in range(EPOCHS):
         optimizer = adjust_learning_rate(optimizer, epoch)
 
         ## training epoch
@@ -140,13 +141,13 @@ if __name__=='__main__':
         test_acc_.append(total_acc / total)
 
         print('[Epoch: %3d/%3d] Training Loss: %.3f, Testing Loss: %.3f, Training Acc: %.3f, Testing Acc: %.3f'
-              % (epoch, epochs, train_loss_[epoch], test_loss_[epoch], train_acc_[epoch], test_acc_[epoch]))
+              % (epoch, EPOCHS, train_loss_[epoch], test_loss_[epoch], train_acc_[epoch], test_acc_[epoch]))
 
         print()
 
     param = {}
-    param['lr'] = learning_rate
-    param['batch size'] = batch_size
+    param['lr'] = LEARNING_RATE
+    param['batch size'] = BATCH_SIZE
     param['embedding dim'] = embedding_dim
     param['hidden dim'] = hidden_dim
     param['sentence len'] = sentence_len
